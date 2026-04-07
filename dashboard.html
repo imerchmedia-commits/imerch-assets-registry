@@ -41,7 +41,7 @@
         <div class="kpi-grid">
             <div class="kpi-card"><span class="kpi-label">Total Investment</span><span class="kpi-val" id="totalValue">₱0</span></div>
             <div class="kpi-card"><span class="kpi-label">Units Registered</span><span class="kpi-val" id="totalUnits">0</span></div>
-            <div class="kpi-card"><span class="kpi-label">Active Warranty</span><span class="kpi-val" id="activeW">0</span></div>
+            <div class="kpi-card"><span class="kpi-label">Active Warranty</span><span class="kpi-val" style="color: #238636;" id="activeW">0</span></div>
             <div class="kpi-card"><span class="kpi-label">Expired</span><span class="kpi-val" style="color:var(--red)" id="expiredW">0</span></div>
         </div>
 
@@ -61,12 +61,24 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = { /* PASTE YOUR CONFIG HERE */ };
+        // Official iMerch Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCF_13Be6pBym7R5d3dEGWr_LMrETSK5jY",
+            authDomain: "imerch-assets-registry.firebaseapp.com",
+            projectId: "imerch-assets-registry",
+            storageBucket: "imerch-assets-registry.firebasestorage.app",
+            messagingSenderId: "548511905607",
+            appId: "1:548511905607:web:972255df769c3a389c3e62",
+            measurementId: "G-HKD2PTHY7Q"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
         const spendingCtx = document.getElementById('spendingChart').getContext('2d');
         const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+
+        let sChart, cChart;
 
         onSnapshot(collection(db, "assets"), (snap) => {
             let total = 0, units = 0, expired = 0, active = 0;
@@ -76,17 +88,24 @@
             snap.forEach(doc => {
                 const d = doc.data();
                 units++;
-                total += d.price;
+                total += Number(d.price || 0);
 
-                // Warranty check
-                if(new Date(d.warranty) < today) expired++; else active++;
+                // Warranty check (Base sa field name na 'warranty')
+                if (d.warranty) {
+                    const wDate = new Date(d.warranty);
+                    if (wDate < today) expired++; else active++;
+                }
 
-                // Category grouping
-                categories[d.category] = (categories[d.category] || 0) + 1;
+                // Category grouping (Base sa field name na 'category')
+                if (d.category) {
+                    categories[d.category] = (categories[d.category] || 0) + 1;
+                }
 
-                // Monthly spending grouping
-                const month = d.dateP.substring(0, 7); // YYYY-MM
-                monthlyData[month] = (monthlyData[month] || 0) + d.price;
+                // Monthly spending grouping (Base sa field name na 'dateP')
+                if (d.dateP) {
+                    const month = d.dateP.substring(0, 7); // Kukuha ng YYYY-MM
+                    monthlyData[month] = (monthlyData[month] || 0) + Number(d.price || 0);
+                }
             });
 
             document.getElementById('totalValue').innerText = "₱" + total.toLocaleString();
@@ -97,7 +116,6 @@
             updateCharts(categories, monthlyData);
         });
 
-        let sChart, cChart;
         function updateCharts(catData, monthData) {
             if(sChart) sChart.destroy();
             if(cChart) cChart.destroy();
@@ -107,9 +125,21 @@
                 type: 'bar',
                 data: {
                     labels: Object.keys(monthData).sort(),
-                    datasets: [{ label: 'Spending (PHP)', data: Object.values(monthData), backgroundColor: '#58a6ff' }]
+                    datasets: [{ 
+                        label: 'Spending (PHP)', 
+                        data: Object.values(monthData), 
+                        backgroundColor: '#58a6ff',
+                        borderRadius: 8
+                    }]
                 },
-                options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+                options: { 
+                    responsive: true,
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#30363d' } },
+                        x: { grid: { display: false } }
+                    }, 
+                    plugins: { legend: { display: false } } 
+                }
             });
 
             // Pie Chart for Category
@@ -117,7 +147,17 @@
                 type: 'doughnut',
                 data: {
                     labels: Object.keys(catData),
-                    datasets: [{ data: Object.values(catData), backgroundColor: ['#d90429', '#58a6ff', '#238636', '#f1e05a'] }]
+                    datasets: [{ 
+                        data: Object.values(catData), 
+                        backgroundColor: ['#d90429', '#58a6ff', '#238636', '#f1e05a'],
+                        borderWidth: 0 
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#f0f6fc' } }
+                    }
                 }
             });
         }
