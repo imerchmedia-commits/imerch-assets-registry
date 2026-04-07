@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMERCH | ANALYTICS DASHBOARD</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #0b0e14; --card: #151921; --accent: #58a6ff; --border: #30363d; --red: #d90429; --text: #f0f6fc; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background: var(--card); height: 100vh; border-right: 1px solid var(--border); padding: 30px 20px; position: fixed; }
+        .nav-item { padding: 15px; border-radius: 12px; color: #8b949e; text-decoration: none; display: flex; align-items: center; gap: 15px; margin-bottom: 10px; transition: 0.3s; }
+        .nav-item.active { background: rgba(88, 166, 255, 0.1); color: var(--accent); font-weight: 800; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); }
+
+        /* Main Content */
+        .main { margin-left: 250px; padding: 40px; width: 100%; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-top: 30px; }
+        .chart-container { background: var(--card); padding: 25px; border-radius: 25px; border: 1px solid var(--border); }
+        
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .kpi-card { background: var(--card); padding: 20px; border-radius: 20px; border: 1px solid var(--border); }
+        .kpi-label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; }
+        .kpi-val { font-size: 1.5rem; font-weight: 800; display: block; margin-top: 5px; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2 style="color: var(--red); margin-bottom: 40px;">iMerch<span>.</span></h2>
+        <a href="dashboard.html" class="nav-item active"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        <a href="registry.html" class="nav-item"><i class="fas fa-list"></i> Asset Registry</a>
+    </div>
+
+    <div class="main">
+        <h1>Executive Overview</h1>
+        
+        <div class="kpi-grid">
+            <div class="kpi-card"><span class="kpi-label">Total Investment</span><span class="kpi-val" id="totalValue">₱0</span></div>
+            <div class="kpi-card"><span class="kpi-label">Units Registered</span><span class="kpi-val" id="totalUnits">0</span></div>
+            <div class="kpi-card"><span class="kpi-label">Active Warranty</span><span class="kpi-val" id="activeW">0</span></div>
+            <div class="kpi-card"><span class="kpi-label">Expired</span><span class="kpi-val" style="color:var(--red)" id="expiredW">0</span></div>
+        </div>
+
+        <div class="grid">
+            <div class="chart-container">
+                <h3 style="margin-top:0">Monthly Spending</h3>
+                <canvas id="spendingChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 style="margin-top:0">Asset Distribution</h3>
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = { /* PASTE YOUR CONFIG HERE */ };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const spendingCtx = document.getElementById('spendingChart').getContext('2d');
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+
+        onSnapshot(collection(db, "assets"), (snap) => {
+            let total = 0, units = 0, expired = 0, active = 0;
+            let categories = {}, monthlyData = {};
+            const today = new Date();
+
+            snap.forEach(doc => {
+                const d = doc.data();
+                units++;
+                total += d.price;
+
+                // Warranty check
+                if(new Date(d.warranty) < today) expired++; else active++;
+
+                // Category grouping
+                categories[d.category] = (categories[d.category] || 0) + 1;
+
+                // Monthly spending grouping
+                const month = d.dateP.substring(0, 7); // YYYY-MM
+                monthlyData[month] = (monthlyData[month] || 0) + d.price;
+            });
+
+            document.getElementById('totalValue').innerText = "₱" + total.toLocaleString();
+            document.getElementById('totalUnits').innerText = units;
+            document.getElementById('activeW').innerText = active;
+            document.getElementById('expiredW').innerText = expired;
+
+            updateCharts(categories, monthlyData);
+        });
+
+        let sChart, cChart;
+        function updateCharts(catData, monthData) {
+            if(sChart) sChart.destroy();
+            if(cChart) cChart.destroy();
+
+            // Bar Chart for Monthly Spending
+            sChart = new Chart(spendingCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(monthData).sort(),
+                    datasets: [{ label: 'Spending (PHP)', data: Object.values(monthData), backgroundColor: '#58a6ff' }]
+                },
+                options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+            });
+
+            // Pie Chart for Category
+            cChart = new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(catData),
+                    datasets: [{ data: Object.values(catData), backgroundColor: ['#d90429', '#58a6ff', '#238636', '#f1e05a'] }]
+                }
+            });
+        }
+    </script>
+</body>
+</html>
